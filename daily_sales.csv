@@ -1,0 +1,16 @@
+transaction_id,date,product_id,product_name,category,quantity,revenue,customer_region,payment_method,shipping_status
+TXN1001,2024-10-01,P001,ErgoChair,Furniture,15,4500,North-East,Credit Card,Shipped
+TXN1002,2024-10-01,P002,StandingDesk,Furniture,8,3200,West,PayPal,Processing
+TXN1003,2024-10-01,P003,MonitorArm,Accessories,20,1000,South,Credit Card,Delivered
+TXN1004,2024-10-02,P001,ErgoChair,Furniture,18,5400,North-East,Debit Card,Shipped
+TXN1005,2024-10-02,P002,StandingDesk,Furniture,10,4000,Midwest,Credit Card,Shipped
+TXN1006,2024-10-02,P003,MonitorArm,Accessories,22,1100,West,PayPal,Delivered
+TXN1007,2024-10-03,P001,ErgoChair,Furniture,12,3600,South,Credit Card,Processing
+TXN1008,2024-10-03,P002,StandingDesk,Furniture,15,6000,North-East,Credit Card,Shipped
+TXN1009,2024-10-03,P003,MonitorArm,Accessories,18,900,West,Debit Card,Delivered
+TXN1010,2024-10-04,P001,ErgoChair,Furniture,20,6000,Midwest,PayPal,Shipped
+TXN1011,2024-10-04,P002,StandingDesk,Furniture,12,4800,South,Credit Card,Processing
+TXN1012,2024-10-04,P003,MonitorArm,Accessories,25,1250,North-East,Credit Card,Delivered
+TXN1013,2024-10-05,P001,ErgoChair,Furniture,25,7500,West,Credit Card,Shipped
+TXN1014,2024-10-05,P002,StandingDesk,Furniture,20,8000,Midwest,PayPal,Shipped
+TXN1015,2024-10-05,P003,MonitorArm,Accessories,30,1500,South,Debit Card,Delivered

@@ -1,0 +1,11 @@
+date,campaign_id,product_id,cost,impressions,clicks,platform,ad_type,ctr,conversion_rate
+2024-10-01,C001,P001,50.00,5000,100,Google,Search,2.0%,3.0%
+2024-10-01,C002,P002,40.00,4000,80,Facebook,Display,2.0%,2.5%
+2024-10-02,C001,P001,55.00,5500,110,Google,Search,2.0%,3.1%
+2024-10-02,C002,P002,42.00,4200,85,Instagram,Story,2.02%,2.4%
+2024-10-03,C001,P001,45.00,4500,90,Google,Search,2.0%,2.9%
+2024-10-03,C002,P002,60.00,6000,120,Facebook,Display,2.0%,2.6%
+2024-10-04,C001,P001,70.00,7000,150,Google,Search,2.14%,3.2%
+2024-10-04,C002,P002,50.00,5000,100,Instagram,Reel,2.0%,2.8%
+2024-10-05,C001,P001,80.00,8000,180,Google,Search,2.25%,3.5%
+2024-10-05,C002,P002,65.00,6500,130,Facebook,Display,2.0%,2.7%

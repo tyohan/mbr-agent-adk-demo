@@ -1,0 +1,5 @@
+code,product_id,discount_percentage,status
+WELCOME10,ALL,10,Active
+ERGO20,P001,20,Active
+DESK15,P002,15,Expired
+FALLSALE,ALL,5,Active

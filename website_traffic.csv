@@ -1,0 +1,16 @@
+date,page_path,visits,unique_visitors,bounce_rate,avg_session_duration,device_type,source
+2024-10-01,/,1500,1200,45%,120s,Desktop,Organic
+2024-10-01,/product/P001,500,400,30%,180s,Mobile,Ads
+2024-10-01,/product/P002,300,250,35%,150s,Desktop,Email
+2024-10-02,/,1600,1300,42%,130s,Mobile,Organic
+2024-10-02,/product/P001,550,450,28%,190s,Desktop,Ads
+2024-10-02,/product/P002,320,270,33%,160s,Mobile,Social
+2024-10-03,/,1450,1150,48%,110s,Desktop,Organic
+2024-10-03,/product/P001,480,390,32%,170s,Mobile,Ads
+2024-10-03,/product/P002,350,300,36%,140s,Desktop,Email
+2024-10-04,/,1800,1500,40%,140s,Mobile,Organic
+2024-10-04,/product/P001,700,600,25%,200s,Desktop,Ads
+2024-10-04,/product/P002,400,350,30%,170s,Mobile,Social
+2024-10-05,/,2000,1700,38%,150s,Desktop,Organic
+2024-10-05,/product/P001,800,700,22%,210s,Mobile,Ads
+2024-10-05,/product/P002,500,450,28%,180s,Desktop,Email

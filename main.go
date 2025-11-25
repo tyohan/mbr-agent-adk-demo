@@ -1,0 +1,363 @@
+package main
+
+import (
+	"context"
+	"encoding/csv"
+	"fmt"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/charmbracelet/glamour"
+	"github.com/joho/godotenv"
+	"google.golang.org/adk/agent"
+	"google.golang.org/adk/agent/llmagent"
+	"google.golang.org/adk/agent/workflowagents/sequentialagent"
+	"google.golang.org/adk/model/gemini"
+	"google.golang.org/adk/runner"
+	"google.golang.org/adk/session"
+	"google.golang.org/adk/tool"
+	"google.golang.org/adk/tool/functiontool"
+	"google.golang.org/genai"
+)
+
+// --- Tool Definitions ---
+
+// FindFilesTool defines the input for finding files.
+type FindFilesTool struct {
+	Pattern string `json:"pattern" doc:"The glob pattern to search for files (e.g., '*.csv')."`
+}
+
+// FindFilesOutput defines the output for finding files.
+type FindFilesOutput struct {
+	Files []string `json:"files"`
+}
+
+func findFilesHandler(ctx tool.Context, args FindFilesTool) (*FindFilesOutput, error) {
+	files, err := filepath.Glob(args.Pattern)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find files with pattern %s: %w", args.Pattern, err)
+	}
+	return &FindFilesOutput{Files: files}, nil
+}
+
+// ReadRowsTool defines the input for reading specific rows.
+type ReadRowsTool struct {
+	FileName string `json:"file_name" doc:"The name of the CSV file to read."`
+	StartRow int    `json:"start_row" doc:"The starting row index (0-based)."`
+	EndRow   int    `json:"end_row" doc:"The ending row index (exclusive)."`
+}
+
+// ReadRowsOutput defines the output for reading rows.
+type ReadRowsOutput struct {
+	Rows [][]string `json:"rows"`
+}
+
+func readRowsHandler(ctx tool.Context, args ReadRowsTool) (*ReadRowsOutput, error) {
+	f, err := os.Open(args.FileName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file %s: %w", args.FileName, err)
+	}
+	defer f.Close()
+
+	reader := csv.NewReader(f)
+	allRows, err := reader.ReadAll()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read CSV content: %w", err)
+	}
+
+	if args.StartRow < 0 {
+		args.StartRow = 0
+	}
+	if args.EndRow > len(allRows) {
+		args.EndRow = len(allRows)
+	}
+	if args.StartRow >= args.EndRow {
+		return &ReadRowsOutput{Rows: [][]string{}}, nil
+	}
+
+	return &ReadRowsOutput{Rows: allRows[args.StartRow:args.EndRow]}, nil
+}
+
+// ReadColumnsTool defines the input for reading specific columns.
+type ReadColumnsTool struct {
+	FileName string   `json:"file_name" doc:"The name of the CSV file to read."`
+	Columns  []string `json:"columns" doc:"The list of column names to retrieve."`
+}
+
+// ReadColumnsOutput defines the output for reading columns.
+type ReadColumnsOutput struct {
+	Data []map[string]string `json:"data"`
+}
+
+func readColumnsHandler(ctx tool.Context, args ReadColumnsTool) (*ReadColumnsOutput, error) {
+	f, err := os.Open(args.FileName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file %s: %w", args.FileName, err)
+	}
+	defer f.Close()
+
+	reader := csv.NewReader(f)
+	allRows, err := reader.ReadAll()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read CSV content: %w", err)
+	}
+
+	if len(allRows) == 0 {
+		return &ReadColumnsOutput{Data: []map[string]string{}}, nil
+	}
+
+	header := allRows[0]
+	colIndices := make(map[string]int)
+	for i, col := range header {
+		colIndices[col] = i
+	}
+
+	// Prepare a list of columns to read that actually exist in the file
+	type colMapping struct {
+		Name  string
+		Index int
+	}
+	var targetCols []colMapping
+	for _, col := range args.Columns {
+		if idx, ok := colIndices[col]; ok {
+			targetCols = append(targetCols, colMapping{Name: col, Index: idx})
+		}
+	}
+
+	var result []map[string]string
+	// Skip header, read data rows
+	for _, row := range allRows[1:] {
+		rowMap := make(map[string]string)
+		for _, target := range targetCols {
+			if target.Index < len(row) {
+				rowMap[target.Name] = row[target.Index]
+			}
+		}
+		result = append(result, rowMap)
+	}
+
+	return &ReadColumnsOutput{Data: result}, nil
+}
+
+// --- Main Execution ---
+
+func main() {
+	ctx := context.Background()
+	// load ENV from .env file
+	err := godotenv.Load()
+	if err != nil {
+		log.Println("Error loading .env file, proceeding without it (this is normal if not using a .env file):", err)
+	}
+
+	apiKey := os.Getenv("GOOGLE_API_KEY")
+	if apiKey == "" {
+		log.Fatal("GOOGLE_API_KEY environment variable is not set")
+	}
+
+	// 1. Initialize Models
+	clientConfig := &genai.ClientConfig{
+		APIKey: apiKey,
+	}
+
+	flashModel, err := gemini.NewModel(ctx, "gemini-2.5-flash", clientConfig)
+	if err != nil {
+		log.Fatalf("Failed to create Flash model: %v", err)
+	}
+
+	proModel, err := gemini.NewModel(ctx, "gemini-2.5-pro", clientConfig)
+	if err != nil {
+		log.Fatalf("Failed to create Pro model: %v", err)
+	}
+
+	// 2. Define Tools
+	findFilesTool, err := functiontool.New(
+		functiontool.Config{
+			Name:        "find_files",
+			Description: "Finds files matching a glob pattern.",
+		},
+		findFilesHandler,
+	)
+	if err != nil {
+		log.Fatalf("Failed to create find_files tool: %v", err)
+	}
+
+	readRowsTool, err := functiontool.New(
+		functiontool.Config{
+			Name:        "read_rows",
+			Description: "Reads specific rows from a CSV file. Useful for inspecting headers (rows 0-1) or sampling data.",
+		},
+		readRowsHandler,
+	)
+	if err != nil {
+		log.Fatalf("Failed to create read_rows tool: %v", err)
+	}
+
+	readColumnsTool, err := functiontool.New(
+		functiontool.Config{
+			Name:        "read_columns",
+			Description: "Reads specific columns from a CSV file. Use this to extract only relevant data fields.",
+		},
+		readColumnsHandler,
+	)
+	if err != nil {
+		log.Fatalf("Failed to create read_columns tool: %v", err)
+	}
+
+	// 3. Create Agents
+
+	// --- Collector Agent ---
+	collector, err := llmagent.New(llmagent.Config{
+		Name:  "Collector",
+		Model: flashModel,
+		Tools: []tool.Tool{findFilesTool, readRowsTool, readColumnsTool},
+		Instruction: `You are a Data Collector Agent. Your goal is to retrieve all necessary data for a Monthly Business Report.
+
+You do NOT know the filenames beforehand. You must:
+1. Search for relevant CSV files using 'find_files' (e.g., search for "*.csv").
+2. For each file found, inspect the first few rows (e.g., rows 0 to 2) using 'read_rows' to understand the schema/columns.
+3. Based on the schema, extract ONLY the relevant columns using 'read_columns'. Do NOT read the entire file if there are irrelevant columns.
+
+Relevant data includes:
+- Sales: date, product_name, revenue, quantity
+- Traffic: date, visits, unique_visitors
+- Ads: date, cost, impressions, clicks
+- Stock: date, product_id, stock_level
+- Coupons: code, discount_percentage
+
+Return the collected data in a structured format, clearly labeling which source it came from.`,
+	})
+	if err != nil {
+		log.Fatalf("Failed to create collector agent: %v", err)
+	}
+
+	// --- Analyst Agent ---
+	analyst, err := llmagent.New(llmagent.Config{
+		Name:  "Analyst",
+		Model: proModel,
+		Instruction: `You are a Senior Business Analyst. You will receive raw data collected by the Collector Agent in the conversation history.
+Your goal is to generate a comprehensive Monthly Business Report for October 2024.
+The report must include:
+1. Executive Summary
+2. Key Performance Indicators (Revenue, Traffic, etc.)
+3. Product Performance Analysis
+4. Marketing Insights (Ads vs Sales, Coupon impact)
+5. Inventory/Stock Alerts
+6. Strategic Recommendations for next month
+
+Use the provided data to back up your claims. Be professional and insightful.`,
+	})
+	if err != nil {
+		log.Fatalf("Failed to create analyst agent: %v", err)
+	}
+
+	// --- Sequential Workflow Agent ---
+	workflowAgent, err := sequentialagent.New(sequentialagent.Config{
+		AgentConfig: agent.Config{
+			Name:        "ReportWorkflow",
+			Description: "Workflow to collect data and generate a business report",
+			SubAgents:   []agent.Agent{collector, analyst},
+		},
+	})
+	if err != nil {
+		log.Fatalf("Failed to create workflow agent: %v", err)
+	}
+
+	// 4. Setup Runner
+	sessionService := session.InMemoryService()
+
+	workflowRunner, err := runner.New(runner.Config{
+		AppName:        "mbr-demo",
+		Agent:          workflowAgent,
+		SessionService: sessionService,
+	})
+	if err != nil {
+		log.Fatalf("Failed to create workflow runner: %v", err)
+	}
+
+	// 5. Execute Flow
+
+	userPrompt := "Please generate the Monthly Business Report for October 2024."
+	fmt.Printf("USER: %s\n\n", userPrompt)
+	fmt.Println("--- Workflow Agent Running ---")
+
+	// Create session
+	_, err = sessionService.Create(ctx, &session.CreateRequest{
+		AppName:   "mbr-demo",
+		SessionID: "session_workflow",
+		UserID:    "user",
+	})
+	if err != nil {
+		log.Fatalf("Failed to create session: %v", err)
+	}
+
+	// Run the sequential agent
+	// The sequential agent will run Collector then Analyst.
+	iter := workflowRunner.Run(ctx, "user", "session_workflow", genai.NewContentFromText(userPrompt, "user"), agent.RunConfig{})
+
+	var finalOutputBuilder strings.Builder
+	for event, err := range iter {
+		if err != nil {
+			log.Printf("Workflow error: %v", err)
+			continue
+		}
+
+		// Log intermediate steps for visibility
+		if event.Content != nil {
+			// Check if it's a tool call
+			for _, part := range event.Content.Parts {
+				if part.FunctionCall != nil {
+					fmt.Printf("[%s] Calling Tool: %s Args: %v\n", event.Author, part.FunctionCall.Name, part.FunctionCall.Args)
+				}
+			}
+
+			// Check if it's a text response from an agent (Collector or Analyst)
+			// We can filter by Author if we want, or just print everything that isn't a tool call
+			// For this demo, let's print the text parts to see the flow.
+			for _, part := range event.Content.Parts {
+				if part.Text != "" {
+					// We only want to capture the FINAL output for the report,
+					// but we might want to see the Collector's output in the console too.
+					fmt.Printf("[%s] Output: %s...\n", event.Author, firstN(part.Text, 50))
+				}
+			}
+		}
+
+		// In a sequential agent, the final event of the sequence is the response of the last agent.
+		if event.IsFinalResponse() && event.Content != nil {
+			for _, part := range event.Content.Parts {
+				finalOutputBuilder.WriteString(part.Text)
+			}
+		}
+	}
+
+	fmt.Println("\n================================================")
+	fmt.Println("FINAL REPORT")
+	fmt.Println("================================================")
+
+	renderer, err := glamour.NewTermRenderer(
+		glamour.WithStandardStyle("notty"),
+		glamour.WithWordWrap(100),
+	)
+	if err != nil {
+		fmt.Println("Error creating renderer:", err)
+		fmt.Println(finalOutputBuilder.String())
+		return
+	}
+
+	out, err := renderer.Render(finalOutputBuilder.String())
+	if err != nil {
+		fmt.Println("Error rendering markdown:", err)
+		fmt.Println(finalOutputBuilder.String())
+	} else {
+		fmt.Println(out)
+	}
+}
+
+func firstN(s string, n int) string {
+	if len(s) > n {
+		return s[:n]
+	}
+	return s
+}
