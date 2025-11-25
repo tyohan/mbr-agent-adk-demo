@@ -8,6 +8,20 @@ This is a demo of Monthly Business Report Agent using Google ADK. It use the com
 2. Install dependencies `go mod tidy`
 3. Run the demo `go run main.go`
 
+### Google ADK Capabilities Demonstrated
+
+This demo showcases several key features of the Google Agent Development Kit (ADK):
+
+1.  **GenAI Model Integration**: Seamlessly interfaces with Gemini Flash and Pro models using `google.golang.org/adk/model/gemini`.
+2.  **Custom Tool Definition**: Defines type-safe tools (`find_files`, `read_rows`, `read_columns`) using `google.golang.org/adk/tool/functiontool`.
+3.  **Agent Architecture**:
+    *   **LLM Agents**: Implements specialized agents ("Collector" and "Analyst") with distinct personas and toolsets using `google.golang.org/adk/agent/llmagent`.
+    *   **Sequential Workflow**: Chains agents together where the output of one becomes the input of the next using `google.golang.org/adk/agent/workflowagents/sequentialagent`.
+4.  **Lifecycle Callbacks**:
+    *   **BeforeAgentCallbacks**: Implements an audit logger to record request details before processing.
+    *   **AfterAgentCallbacks**: Implements a compliance injector to append a legal disclaimer to the final output.
+5.  **Session Management**: Manages conversation state and history using `google.golang.org/adk/session`.
+
 ### Execution output:
 
 ```bash
